@@ -1,0 +1,286 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+local Window = OrionLib:MakeWindow({Name = "Phone7888 Hub", HidePremium = false, SaveConfig = false, ConfigFolder = "Phone7888Config"})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- ตัวแปรตั้งค่าระบบล็อกเป้า
+local AimSettings = {
+    Enabled = false,
+    AutoShoot = false,
+    TeamCheck = true,
+    WallCheck = true,
+    FOV = 150
+}
+
+-- ตัวแปรตั้งค่าระบบมอง (ESP)
+local ESPSettings = {
+    Name = false,
+    Health = false,
+    Chams = false
+}
+
+---------------------------------------------------------
+-- ฟังก์ชันช่วยคำนวณการล็อกหัว (Aimbot Engine)
+---------------------------------------------------------
+local function IsVisible(targetPart)
+    if not AimSettings.WallCheck then return true end
+    local ray = Ray.new(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000)
+    local ignoreList = {LocalPlayer.Character, targetPart.Parent}
+    local hit = workspace:FindPartOnRayWithIgnoreList(ray, ignoreList)
+    return hit == nil or hit:IsDescendantOf(targetPart.Parent)
+end
+
+local function GetClosestPlayer()
+    local closest = nil
+    local shortestDistance = AimSettings.FOV
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") then
+            if player.Character.Humanoid.Health > 0 then
+                if not (AimSettings.TeamCheck and player.Team == LocalPlayer.Team and LocalPlayer.Team ~= nil) then
+                    local head = player.Character.Head
+                    local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    
+                    if onScreen then
+                        local mousePos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                        local distance = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+
+                        if distance < shortestDistance and IsVisible(head) then
+                            shortestDistance = distance
+                            closest = player
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local AimbotConnection
+AimbotConnection = RunService.RenderStepped:Connect(function()
+    if AimSettings.Enabled then
+        local target = GetClosestPlayer()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
+            if AimSettings.AutoShoot then
+                mouse1press()
+                task.wait(0.05)
+                mouse1release()
+            end
+        end
+    end
+end)
+
+---------------------------------------------------------
+-- TAB 1: เมนูหลัก (Combat & Aimbot)
+---------------------------------------------------------
+local MainTab = Window:MakeTab({
+	Name = "เมนูหลัก",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+MainTab:AddToggle({
+	Name = "ล็อกหัว (Aimbot)",
+	Default = false,
+	Callback = function(Value)
+		AimSettings.Enabled = Value
+	end    
+})
+
+MainTab:AddToggle({
+	Name = "ยิงออโต้ / ฆ่าออโต้ (Auto Shoot)",
+	Default = false,
+	Callback = function(Value)
+		AimSettings.AutoShoot = Value
+	end    
+})
+
+MainTab:AddToggle({
+	Name = "ไม่ล็อกทีมเดียวกัน (Team Check)",
+	Default = true,
+	Callback = function(Value)
+		AimSettings.TeamCheck = Value
+	end    
+})
+
+MainTab:AddToggle({
+	Name = "ไม่ล็อกตัวหลังกำแพง (Wall Check)",
+	Default = true,
+	Callback = function(Value)
+		AimSettings.WallCheck = Value
+	end    
+})
+
+MainTab:AddSlider({
+	Name = "ระยะรัศมีการล็อก (FOV Radius)",
+	Min = 50,
+	Max = 500,
+	Default = 150,
+	Color = Color3.fromRGB(255, 0, 0),
+	Increment = 10,
+	ValueName = "px",
+	Callback = function(Value)
+		AimSettings.FOV = Value
+	end    
+})
+
+---------------------------------------------------------
+-- TAB 2: เมนูมอง (ESP & Visuals)
+---------------------------------------------------------
+local VisualTab = Window:MakeTab({
+	Name = "เมนูมอง",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+VisualTab:AddToggle({
+	Name = "มองโครงร่าง / ไฮไลท์ (Chams ESP)",
+	Default = false,
+	Callback = function(Value)
+		ESPSettings.Chams = Value
+		for _, player in pairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character then
+				local hl = player.Character:FindFirstChild("Phone7888_HL")
+				if Value then
+					if not hl then
+						hl = Instance.new("Highlight")
+						hl.Name = "Phone7888_HL"
+						hl.FillColor = Color3.fromRGB(255, 0, 50)
+						hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+						hl.Parent = player.Character
+					end
+				else
+					if hl then hl:Destroy() end
+				end
+			end
+		end
+	end    
+})
+
+VisualTab:AddToggle({
+	Name = "มองชื่อผู้เล่น (Name ESP)",
+	Default = false,
+	Callback = function(Value)
+		ESPSettings.Name = Value
+		for _, player in pairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+				local bb = player.Character.Head:FindFirstChild("Phone7888_Name")
+				if Value then
+					if not bb then
+						bb = Instance.new("BillboardGui")
+						bb.Name = "Phone7888_Name"
+						bb.Size = UDim2.new(0, 100, 0, 30)
+						bb.StudsOffset = Vector3.new(0, 2, 0)
+						bb.AlwaysOnTop = true
+						
+						local txt = Instance.new("TextLabel")
+						txt.Parent = bb
+						txt.Size = UDim2.new(1, 0, 1, 0)
+						txt.BackgroundTransparency = 1
+						txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+						txt.Text = player.Name
+						txt.TextScaled = true
+						
+						bb.Parent = player.Character.Head
+					end
+				else
+					if bb then bb:Destroy() end
+				end
+			end
+		end
+	end    
+})
+
+VisualTab:AddToggle({
+	Name = "มองเลือด (Health ESP)",
+	Default = false,
+	Callback = function(Value)
+		ESPSettings.Health = Value
+		for _, player in pairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				local bb = player.Character.HumanoidRootPart:FindFirstChild("Phone7888_HP")
+				if Value then
+					if not bb then
+						bb = Instance.new("BillboardGui")
+						bb.Name = "Phone7888_HP"
+						bb.Size = UDim2.new(0, 80, 0, 20)
+						bb.StudsOffset = Vector3.new(0, -3, 0)
+						bb.AlwaysOnTop = true
+						
+						local txt = Instance.new("TextLabel")
+						txt.Parent = bb
+						txt.Size = UDim2.new(1, 0, 1, 0)
+						txt.BackgroundTransparency = 1
+						txt.TextColor3 = Color3.fromRGB(0, 255, 100)
+						local hum = player.Character:FindFirstChild("Humanoid")
+						txt.Text = "HP: " .. (hum and math.floor(hum.Health) or "100")
+						txt.TextScaled = true
+						
+						bb.Parent = player.Character.HumanoidRootPart
+					end
+				else
+					if bb then bb:Destroy() end
+				end
+			end
+		end
+	end    
+})
+
+---------------------------------------------------------
+-- TAB 3: เคลื่อนที่ (Movement)
+---------------------------------------------------------
+local MoveTab = Window:MakeTab({
+	Name = "เคลื่อนที่",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+MoveTab:AddSlider({
+	Name = "วิ่งเร็ว (WalkSpeed)",
+	Min = 16,
+	Max = 300,
+	Default = 16,
+	Color = Color3.fromRGB(0, 255, 255),
+	Increment = 1,
+	ValueName = "Speed",
+	Callback = function(Value)
+		if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+			LocalPlayer.Character.Humanoid.WalkSpeed = Value
+		end
+	end    
+})
+
+local Flying = false
+local FlySpeed = 50
+MoveTab:AddToggle({
+	Name = "บินได้ (Fly)",
+	Default = false,
+	Callback = function(Value)
+		Flying = Value
+		local char = LocalPlayer.Character
+		if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+		local hrp = char.HumanoidRootPart
+		
+		if Flying then
+			local bv = Instance.new("BodyVelocity")
+			bv.Name = "Phone7888_Fly"
+			bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+			bv.Velocity = Vector3.zero
+			bv.Parent = hrp
+			
+			task.spawn(function()
+				while Flying and char and hrp:FindFirstChild("Phone7888_Fly") do
+					bv.Velocity = Camera.CFrame.LookVector * FlySpeed
+					task.wait()
+				end
+				bv:Destroy()
+			end)
+		else
+			if hrp:FindFirstChild("Phone7888_Fly") then
+				hrp.Phone78
